@@ -7,7 +7,7 @@ Future<void> main() async {
   // 1. Ensures Flutter framework is completely ready before we start async operations
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 2. Initialize Supabase (Replace with your actual URL and Anon Key from supabase.com)
+  // 2. Initialize Supabase
   await Supabase.initialize(
     url: 'https://rkwhdydmslnylirehmlg.supabase.co',
     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJrd2hkeWRtc2xueWxpcmVobWxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0OTc4NDAsImV4cCI6MjA5ODA3Mzg0MH0.rkumwlfgEpmE-snQ-BW7hxQowMiIrWF80ollmwFFWDM',
@@ -21,6 +21,9 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Check if a user session exists to auto-login
+    final session = Supabase.instance.client.auth.currentSession;
+
     return MaterialApp(
       title: 'Expensio',
       debugShowCheckedModeBanner: false, // Removes the red debug banner
@@ -28,7 +31,8 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.green), // Expensio Theme!
         useMaterial3: true,
       ),
-      home: const LoginScreen(), // Directs the app to start on your Login Screen
+      // If session exists, go straight to ExpenseTrackerScreen
+      home: session != null ? const ExpenseTrackerScreen() : const LoginScreen(),
     );
   }
 }
@@ -64,7 +68,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final response = await _authService.signUpWithEmail(email, password);
 
-    if (response != null && response.user != null) {
+    if (!mounted) return;
+
+    if (response.user != null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Account created! You can now log in.')));
     } else {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sign up failed.')));
@@ -78,15 +84,25 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       await _authService.signInWithEmail(email, password);
+      
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Welcome back!'), backgroundColor: Colors.green),
       );
-      // TODO: Navigator.pushReplacement(...) - go to next screen
+      
+      // Navigate to the Expense Tracker
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const ExpenseTrackerScreen()),
+      );
     } on AuthException catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.message), backgroundColor: Colors.red),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('An unexpected error occurred: $e'), backgroundColor: Colors.red),
       );

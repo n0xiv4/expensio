@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'widgets/add_expense.dart';
+import 'package:expensio/widgets/add_expense.dart';
 import 'widgets/expense_chart.dart';
 import 'models/expense.dart';
 
@@ -19,14 +19,19 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
     });
   }
 
-  void _openAddExpense() {
-    showModalBottomSheet(
+  void _openAddExpense() async {
+    final newExpense = await showModalBottomSheet<Expense>(
       context: context,
       isScrollControlled: true,
-      builder: (_) {
-        return AddExpenseForm(onAddExpense: _addExpense);
-      },
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => AddExpenseForm(),
     );
+
+    if (newExpense != null) {
+      _addExpense(newExpense);
+    }
   }
 
   @override
