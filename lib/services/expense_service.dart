@@ -5,16 +5,17 @@ class ExpenseService {
   final _supabase = Supabase.instance.client;
 
   // Stream of expenses for the current user
-  Stream<List<Expense>> getExpensesStream() {
+  Future<List<Expense>> getExpenses() async {
     final userId = _supabase.auth.currentUser?.id;
-    if (userId == null) return Stream.value([]);
+    if (userId == null) return [];
 
-    return _supabase
+    final data = await _supabase
         .from('expenses')
-        .stream(primaryKey: ['id'])
+        .select()
         .eq('user_id', userId)
-        .order('date', ascending: false)
-        .map((data) => data.map((map) => Expense.fromMap(map)).toList());
+        .order('date', ascending: false);
+
+    return data.map((map) => Expense.fromMap(map)).toList();
   }
 
   // Create a new expense

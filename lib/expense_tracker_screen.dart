@@ -20,10 +20,9 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
   final _categoryService = CategoryService();
   final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
   final _searchController = TextEditingController();
-  
+
   List<Expense> _expenses = [];
   List<model.Category> _customCategories = [];
-  StreamSubscription? _expenseSub;
   StreamSubscription? _categorySub;
   bool _isLoading = true;
   bool _isSearching = false;
@@ -32,31 +31,26 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
   @override
   void initState() {
     super.initState();
-    _initStreams();
+    _loadData();
   }
 
-  void _initStreams() {
-    _expenseSub = _expenseService.getExpensesStream().listen((data) {
-      if (mounted) {
-        setState(() {
-          _expenses = data;
-          _isLoading = false;
-        });
-      }
+  // Função nova que vai buscar os dados reais sem bugs de cache
+  Future<void> _loadData() async {
+    _categorySub ??= _categoryService.getCategoriesStream().listen((data) {
+      if (mounted) setState(() => _customCategories = List.from(data));
     });
 
-    _categorySub = _categoryService.getCategoriesStream().listen((data) {
-      if (mounted) {
-        setState(() {
-          _customCategories = data;
-        });
-      }
-    });
+    final data = await _expenseService.getExpenses();
+    if (mounted) {
+      setState(() {
+        _expenses = data;
+        _isLoading = false;
+      });
+    }
   }
 
   @override
   void dispose() {
-    _expenseSub?.cancel();
     _categorySub?.cancel();
     _searchController.dispose();
     super.dispose();
@@ -64,9 +58,9 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
 
   List<Expense> get _filteredExpenses {
     if (_searchQuery.isEmpty) return _expenses;
-    return _expenses.where((e) => 
-      e.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-      e.category.toLowerCase().contains(_searchQuery.toLowerCase())
+    return _expenses.where((e) =>
+    e.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+        e.category.toLowerCase().contains(_searchQuery.toLowerCase())
     ).toList();
   }
 
@@ -81,14 +75,9 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
     if (result != null) {
       if (expense == null) {
         // Add new
-        setState(() {
-          _expenses.insert(0, result);
-          if (_searchQuery.isEmpty) {
-            _listKey.currentState?.insertItem(0);
-          }
-        });
         try {
           await _expenseService.addExpense(result);
+          await _loadData(); // Atualiza a lista com a verdade da BD
         } catch (e) {
           _showError('Failed to save: $e');
         }
@@ -96,6 +85,7 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
         // Update existing
         try {
           await _expenseService.updateExpense(result);
+          await _loadData(); // Atualiza a lista com a verdade da BD
         } catch (e) {
           _showError('Failed to update: $e');
         }
@@ -131,28 +121,16 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
     );
 
     if (confirmed == true && expense.id != null) {
-      final actualIndex = _expenses.indexOf(expense);
-      if (actualIndex == -1) return;
-      
-      final removedItem = _expenses.removeAt(actualIndex);
-      if (_searchQuery.isEmpty) {
-        _listKey.currentState?.removeItem(
-          actualIndex,
-          (context, animation) => _buildItem(removedItem, animation, actualIndex, isRemoving: true),
-        );
-      } else {
-        setState(() {}); // Rebuild list manually if searching
-      }
+      // Apaga do ecrã instantaneamente para não haver lag (Optimistic UI)
+      setState(() {
+        _expenses.removeWhere((e) => e.id == expense.id);
+      });
 
       try {
         await _expenseService.deleteExpense(expense.id!);
+        await _loadData(); // Garante que a lista está sincronizada com a BD
       } catch (e) {
-        setState(() {
-          _expenses.insert(index, removedItem);
-          if (_searchQuery.isEmpty) {
-            _listKey.currentState?.insertItem(index);
-          }
-        });
+        _showError('Failed to delete: $e');
       }
     }
   }
@@ -380,20 +358,12 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
             else
               SliverPadding(
                 padding: const EdgeInsets.only(bottom: 100),
-                sliver: _searchQuery.isEmpty 
-                  ? SliverAnimatedList(
-                      key: _listKey,
-                      initialItemCount: filtered.length,
-                      itemBuilder: (context, index, animation) {
-                        return _buildItem(filtered[index], animation, index);
-                      },
-                    )
-                  : SliverList(
-                      delegate: SliverChildBuilderDelegate(
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
                         (context, index) => _buildItemStatic(filtered[index], index),
-                        childCount: filtered.length,
-                      ),
-                    ),
+                    childCount: filtered.length,
+                  ),
+                ),
               ),
           ],
         ],
