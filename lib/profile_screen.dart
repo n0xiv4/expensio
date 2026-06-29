@@ -20,7 +20,6 @@ class ProfileScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Ícone de Avatar Bonito
               CircleAvatar(
                 radius: 50,
                 backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
@@ -32,13 +31,11 @@ class ProfileScreen extends StatelessWidget {
                 style: TextStyle(color: Colors.white60, fontSize: 14),
               ),
               const SizedBox(height: 8),
-              // Mostra o email real que veio do Supabase
               Text(
                 user?.email ?? "unknown@user.com",
                 style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
               ),
               const SizedBox(height: 48),
-              // Botão de Logout Estilizado
               ElevatedButton.icon(
                 onPressed: () async {
                   await Supabase.instance.client.auth.signOut();

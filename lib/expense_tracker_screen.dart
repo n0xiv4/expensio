@@ -35,7 +35,6 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
     _loadData();
   }
 
-  // Função nova que vai buscar os dados reais sem bugs de cache
   Future<void> _loadData() async {
     _categorySub ??= _categoryService.getCategoriesStream().listen((data) {
       if (mounted) setState(() => _customCategories = List.from(data));
@@ -78,7 +77,7 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
         // Add new
         try {
           await _expenseService.addExpense(result);
-          await _loadData(); // Atualiza a lista com a verdade da BD
+          await _loadData();
         } catch (e) {
           _showError('Failed to save: $e');
         }
@@ -86,7 +85,7 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
         // Update existing
         try {
           await _expenseService.updateExpense(result);
-          await _loadData(); // Atualiza a lista com a verdade da BD
+          await _loadData();
         } catch (e) {
           _showError('Failed to update: $e');
         }
@@ -122,14 +121,13 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
     );
 
     if (confirmed == true && expense.id != null) {
-      // Apaga do ecrã instantaneamente para não haver lag (Optimistic UI)
       setState(() {
         _expenses.removeWhere((e) => e.id == expense.id);
       });
 
       try {
         await _expenseService.deleteExpense(expense.id!);
-        await _loadData(); // Garante que a lista está sincronizada com a BD
+        await _loadData();
       } catch (e) {
         _showError('Failed to delete: $e');
       }
