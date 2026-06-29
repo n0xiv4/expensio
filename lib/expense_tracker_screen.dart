@@ -7,6 +7,7 @@ import 'package:expensio/models/expense.dart';
 import 'package:expensio/services/expense_service.dart';
 import 'package:expensio/models/category.dart' as model;
 import 'package:expensio/services/category_service.dart';
+import 'package:expensio/profile_screen.dart';
 
 class ExpenseTrackerScreen extends StatefulWidget {
   const ExpenseTrackerScreen({super.key});
@@ -312,6 +313,14 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
                 },
               ),
               IconButton(
+                icon: const Icon(Icons.account_circle_rounded, size: 28),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (context) => const ProfileScreen()),
+                  );
+                },
+              ),
+              IconButton(
                 icon: const Icon(Icons.logout_rounded),
                 onPressed: () async {
                   await _expenseService.signOut();
@@ -319,7 +328,7 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
                   if (context.mounted) {
                     Navigator.of(context).pushAndRemoveUntil(
                       MaterialPageRoute(builder: (context) => const LoginScreen()),
-                      (route) => false,
+                          (route) => false,
                     );
                   }
                 },
