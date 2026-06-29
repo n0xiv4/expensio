@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:expensio/login_screen.dart';
 import 'package:expensio/widgets/add_expense.dart';
@@ -14,51 +15,74 @@ class ExpenseTrackerScreen extends StatefulWidget {
 
 class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
   final _expenseService = ExpenseService();
+  List<Expense> _expenses = [];
+  StreamSubscription? _subscription;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // Listen to real-time updates from Supabase
+    _subscription = _expenseService.getExpensesStream().listen((data) {
+      if (mounted) {
+        setState(() {
+          _expenses = data;
+          _isLoading = false;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
 
   void _openAddExpense() async {
     final newExpense = await showModalBottomSheet<Expense>(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (_) => const AddExpenseForm(),
     );
 
     if (newExpense != null) {
+      // 1. Instant local update (Optimistic UI)
+      setState(() {
+        _expenses.insert(0, newExpense);
+      });
+
+      // 2. Background server update
       try {
         await _expenseService.addExpense(newExpense);
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save expense: $e')),
+          SnackBar(content: Text('Error saving to cloud: $e')),
         );
       }
     }
   }
 
   void _confirmDelete(Expense expense) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Delete Expense"),
-        content: const Text("Are you sure you want to delete this record?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-            child: const Text("Delete"),
-          ),
-        ],
-      ),
-    );
+    if (expense.id == null) return;
+    
+    // Instant local remove
+    final index = _expenses.indexOf(expense);
+    setState(() {
+      _expenses.remove(expense);
+    });
 
-    if (confirmed == true && expense.id != null) {
+    try {
       await _expenseService.deleteExpense(expense.id!);
+    } catch (e) {
+      // Revert if failed
+      setState(() {
+        _expenses.insert(index, expense);
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to delete')));
     }
   }
 
@@ -66,50 +90,35 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Expensio Tracker"),
+        title: const Text("Expensio", style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await _expenseService.signOut();
               if (!mounted) return;
-              if (context.mounted) {
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (context) => const LoginScreen()),
-                  (route) => false,
-                );
-              }
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (context) => const LoginScreen()),
+                (route) => false,
+              );
             },
           )
         ],
       ),
-      body: StreamBuilder<List<Expense>>(
-        stream: _expenseService.getExpensesStream(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (snapshot.hasError) {
-            return Center(child: Text("Error: ${snapshot.error}"));
-          }
-
-          final expenses = snapshot.data ?? [];
-
-          return Column(
+      body: _isLoading 
+        ? const Center(child: CircularProgressIndicator())
+        : Column(
             children: [
-              if (expenses.isNotEmpty) ExpenseChart(expenses: expenses),
+              if (_expenses.isNotEmpty) ExpenseChart(expenses: _expenses),
               Expanded(
-                child: expenses.isEmpty
-                    ? const Center(
-                        child: Text("No expenses yet. Tap + to add one!"),
-                      )
+                child: _expenses.isEmpty
+                    ? const Center(child: Text("No expenses yet. Tap + to add one!"))
                     : ListView.builder(
-                        itemCount: expenses.length,
+                        itemCount: _expenses.length,
                         itemBuilder: (context, index) {
-                          final exp = expenses[index];
+                          final exp = _expenses[index];
                           return Dismissible(
-                            key: Key(exp.id ?? index.toString()),
+                            key: Key(exp.id ?? 'temp_${index}_${exp.title}'),
                             background: Container(
                               color: Colors.red,
                               alignment: Alignment.centerRight,
@@ -117,21 +126,17 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
                               child: const Icon(Icons.delete, color: Colors.white),
                             ),
                             direction: DismissDirection.endToStart,
-                            onDismissed: (direction) {
-                              if (exp.id != null) {
-                                _expenseService.deleteExpense(exp.id!);
-                              }
-                            },
-                            child: ListTile(
-                              onTap: () => _confirmDelete(exp),
-                              leading: const CircleAvatar(child: Icon(Icons.shopping_cart)),
-                              title: Text(exp.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Text(
-                                "${exp.category} • ${exp.date.day}/${exp.date.month}/${exp.date.year}",
-                              ),
-                              trailing: Text(
-                                "€${exp.amount.toStringAsFixed(2)}",
-                                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
+                            onDismissed: (direction) => _confirmDelete(exp),
+                            child: Card(
+                              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              child: ListTile(
+                                leading: const CircleAvatar(child: Icon(Icons.receipt_long)),
+                                title: Text(exp.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                                subtitle: Text("${exp.category} • ${exp.date.day}/${exp.date.month}"),
+                                trailing: Text(
+                                  "€${exp.amount.toStringAsFixed(2)}",
+                                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16),
+                                ),
                               ),
                             ),
                           );
@@ -139,9 +144,7 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
                       ),
               ),
             ],
-          );
-        },
-      ),
+          ),
       floatingActionButton: FloatingActionButton(
         onPressed: _openAddExpense,
         child: const Icon(Icons.add),
