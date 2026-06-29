@@ -25,8 +25,66 @@ class MyApp extends StatelessWidget {
       title: 'Expensio',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
         useMaterial3: true,
+        brightness: Brightness.dark,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF10B981), // Emerald Green
+          brightness: Brightness.dark,
+          surface: const Color(0xFF0F172A), // Deep Slate
+          primary: const Color(0xFF10B981),
+          secondary: const Color(0xFF34D399),
+        ).copyWith(
+          surface: const Color(0xFF020617), // Near Black Slate for background
+        ),
+        scaffoldBackgroundColor: const Color(0xFF020617),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          centerTitle: false,
+          titleTextStyle: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        cardTheme: CardThemeData(
+          color: const Color(0xFF1E293B), // Darker Grey/Blue Slate
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: const Color(0xFF1E293B),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFF10B981), width: 1),
+          ),
+          labelStyle: const TextStyle(color: Colors.grey),
+          prefixIconColor: const Color(0xFF10B981),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF10B981),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            minimumSize: const Size.fromHeight(56),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+        ),
+        floatingActionButtonTheme: const FloatingActionButtonThemeData(
+          backgroundColor: Color(0xFF10B981),
+          foregroundColor: Colors.white,
+          shape: CircleBorder(),
+        ),
       ),
       home: session != null ? const ExpenseTrackerScreen() : const LoginScreen(),
     );
