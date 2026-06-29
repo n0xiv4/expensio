@@ -19,12 +19,15 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
   final _expenseService = ExpenseService();
   final _categoryService = CategoryService();
   final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
+  final _searchController = TextEditingController();
   
   List<Expense> _expenses = [];
   List<model.Category> _customCategories = [];
   StreamSubscription? _expenseSub;
   StreamSubscription? _categorySub;
   bool _isLoading = true;
+  bool _isSearching = false;
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -55,7 +58,16 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
   void dispose() {
     _expenseSub?.cancel();
     _categorySub?.cancel();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  List<Expense> get _filteredExpenses {
+    if (_searchQuery.isEmpty) return _expenses;
+    return _expenses.where((e) => 
+      e.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+      e.category.toLowerCase().contains(_searchQuery.toLowerCase())
+    ).toList();
   }
 
   void _openAddExpense({Expense? expense}) async {
@@ -71,7 +83,9 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
         // Add new
         setState(() {
           _expenses.insert(0, result);
-          _listKey.currentState?.insertItem(0);
+          if (_searchQuery.isEmpty) {
+            _listKey.currentState?.insertItem(0);
+          }
         });
         try {
           await _expenseService.addExpense(result);
@@ -117,18 +131,27 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
     );
 
     if (confirmed == true && expense.id != null) {
-      final removedItem = _expenses.removeAt(index);
-      _listKey.currentState?.removeItem(
-        index,
-        (context, animation) => _buildItem(removedItem, animation, index, isRemoving: true),
-      );
+      final actualIndex = _expenses.indexOf(expense);
+      if (actualIndex == -1) return;
+      
+      final removedItem = _expenses.removeAt(actualIndex);
+      if (_searchQuery.isEmpty) {
+        _listKey.currentState?.removeItem(
+          actualIndex,
+          (context, animation) => _buildItem(removedItem, animation, actualIndex, isRemoving: true),
+        );
+      } else {
+        setState(() {}); // Rebuild list manually if searching
+      }
 
       try {
         await _expenseService.deleteExpense(expense.id!);
       } catch (e) {
         setState(() {
           _expenses.insert(index, removedItem);
-          _listKey.currentState?.insertItem(index);
+          if (_searchQuery.isEmpty) {
+            _listKey.currentState?.insertItem(index);
+          }
         });
       }
     }
@@ -139,61 +162,65 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
       sizeFactor: animation,
       child: FadeTransition(
         opacity: animation,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          child: InkWell(
-            onTap: isRemoving ? null : () => _openAddExpense(expense: exp),
-            onLongPress: isRemoving ? null : () => _confirmDelete(exp, index),
+        child: _buildItemStatic(exp, index, isRemoving: isRemoving),
+      ),
+    );
+  }
+
+  Widget _buildItemStatic(Expense exp, int index, {bool isRemoving = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: InkWell(
+        onTap: isRemoving ? null : () => _openAddExpense(expense: exp),
+        onLongPress: isRemoving ? null : () => _confirmDelete(exp, index),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B),
             borderRadius: BorderRadius.circular(16),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: _getCategoryColor(exp.category).withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  _getCategoryIcon(exp.category),
+                  color: _getCategoryColor(exp.category),
+                  size: 20,
+                ),
               ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: _getCategoryColor(exp.category).withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      exp.title,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
                     ),
-                    child: Icon(
-                      _getCategoryIcon(exp.category),
-                      color: _getCategoryColor(exp.category),
-                      size: 20,
+                    const SizedBox(height: 4),
+                    Text(
+                      "${exp.category} • ${exp.date.day}/${exp.date.month}",
+                      style: const TextStyle(color: Colors.white60, fontSize: 12),
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          exp.title,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          "${exp.category} • ${exp.date.day}/${exp.date.month}",
-                          style: const TextStyle(color: Colors.white60, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Text(
-                    "€${exp.amount.toStringAsFixed(2)}",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+              Text(
+                "€${exp.amount.toStringAsFixed(2)}",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -201,7 +228,6 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
   }
 
   IconData _getCategoryIcon(String categoryName) {
-    // Check default icons
     switch (categoryName) {
       case 'Food': return Icons.restaurant;
       case 'Transport': return Icons.directions_car;
@@ -211,8 +237,6 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
       case 'Entertainment': return Icons.movie;
       case 'Education': return Icons.book;
     }
-    
-    // Check custom icons
     try {
       final custom = _customCategories.firstWhere((c) => c.name == categoryName);
       return custom.icon;
@@ -237,16 +261,19 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final filtered = _filteredExpenses;
     
     return Scaffold(
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 120.0,
+            expandedHeight: _isSearching ? 80.0 : 120.0,
             floating: false,
             pinned: true,
             flexibleSpace: FlexibleSpaceBar(
-              title: const Text("Expensio", style: TextStyle(fontWeight: FontWeight.bold)),
+              title: _isSearching 
+                  ? null 
+                  : const Text("Expensio", style: TextStyle(fontWeight: FontWeight.bold)),
               centerTitle: false,
               titlePadding: const EdgeInsetsDirectional.only(start: 16, bottom: 16),
               background: Container(
@@ -262,7 +289,50 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
                 ),
               ),
             ),
+            bottom: _isSearching 
+              ? PreferredSize(
+                  preferredSize: const Size.fromHeight(48),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: TextField(
+                      controller: _searchController,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        hintText: "Search transactions...",
+                        prefixIcon: const Icon(Icons.search, color: Colors.white70),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.clear, color: Colors.white70),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        ),
+                        filled: true,
+                        fillColor: Colors.white.withValues(alpha: 0.1),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                      ),
+                      onChanged: (val) => setState(() => _searchQuery = val),
+                    ),
+                  ),
+                )
+              : null,
             actions: [
+              IconButton(
+                icon: Icon(_isSearching ? Icons.close : Icons.search),
+                onPressed: () {
+                  setState(() {
+                    _isSearching = !_isSearching;
+                    if (!_isSearching) {
+                      _searchQuery = '';
+                      _searchController.clear();
+                    }
+                  });
+                },
+              ),
               IconButton(
                 icon: const Icon(Icons.logout_rounded),
                 onPressed: () async {
@@ -284,34 +354,46 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
               child: Center(child: CircularProgressIndicator()),
             )
           else ...[
+            if (!_isSearching)
+              SliverToBoxAdapter(
+                child: ExpenseChart(expenses: _expenses),
+              ),
             SliverToBoxAdapter(
-              child: ExpenseChart(expenses: _expenses),
-            ),
-            const SliverToBoxAdapter(
               child: Padding(
-                padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
+                padding: EdgeInsets.fromLTRB(16, _isSearching ? 16 : 24, 16, 8),
                 child: Text(
-                  "Recent Transactions",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                  _isSearching ? "Search Results (${filtered.length})" : "Recent Transactions",
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
               ),
             ),
-            if (_expenses.isEmpty)
-              const SliverFillRemaining(
+            if (filtered.isEmpty)
+              SliverFillRemaining(
                 hasScrollBody: false,
-                child: Center(child: Text("No expenses yet. Tap + to add one!", style: TextStyle(color: Colors.white54))),
+                child: Center(
+                  child: Text(
+                    _isSearching ? "No matches found" : "No expenses yet. Tap + to add one!", 
+                    style: const TextStyle(color: Colors.white54)
+                  )
+                ),
               )
             else
               SliverPadding(
                 padding: const EdgeInsets.only(bottom: 100),
-                sliver: SliverAnimatedList(
-                  key: _listKey,
-                  initialItemCount: _expenses.length,
-                  itemBuilder: (context, index, animation) {
-                    if (index >= _expenses.length) return const SizedBox.shrink();
-                    return _buildItem(_expenses[index], animation, index);
-                  },
-                ),
+                sliver: _searchQuery.isEmpty 
+                  ? SliverAnimatedList(
+                      key: _listKey,
+                      initialItemCount: filtered.length,
+                      itemBuilder: (context, index, animation) {
+                        return _buildItem(filtered[index], animation, index);
+                      },
+                    )
+                  : SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) => _buildItemStatic(filtered[index], index),
+                        childCount: filtered.length,
+                      ),
+                    ),
               ),
           ],
         ],

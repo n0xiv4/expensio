@@ -145,8 +145,7 @@ class _ExpenseChartState extends State<ExpenseChart> {
                         final index = mapEntry.key;
                         final entry = mapEntry.value;
                         final isTouched = index == touchedIndex;
-                        final fontSize = isTouched ? 16.0 : 12.0;
-                        final radius = isTouched ? 30.0 : 20.0;
+                        final radius = isTouched ? 50.0 : 40.0;
 
                         return PieChartSectionData(
                           value: entry.value,
@@ -158,7 +157,7 @@ class _ExpenseChartState extends State<ExpenseChart> {
                             size: 32,
                             borderColor: getColor(entry.key),
                           ),
-                          badgePositionPercentageOffset: 1.4,
+                          badgePositionPercentageOffset: 1.1,
                         );
                       }).toList(),
                     ),
@@ -167,22 +166,25 @@ class _ExpenseChartState extends State<ExpenseChart> {
                 ),
                 // Custom Tooltip in the center
                 if (touchedIndex != -1 && data.isNotEmpty)
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        data.keys.elementAt(touchedIndex),
-                        style: const TextStyle(fontSize: 14, color: Colors.white70, fontWeight: FontWeight.w500),
-                      ),
-                      Text(
-                        "€${data.values.elementAt(touchedIndex).toStringAsFixed(2)}",
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: getColor(data.keys.elementAt(touchedIndex)),
+                  GestureDetector(
+                    onTap: () => setState(() => touchedIndex = -1),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          data.keys.elementAt(touchedIndex),
+                          style: const TextStyle(fontSize: 14, color: Colors.white70, fontWeight: FontWeight.w500),
                         ),
-                      ),
-                    ],
+                        Text(
+                          "€${data.values.elementAt(touchedIndex).toStringAsFixed(2)}",
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: getColor(data.keys.elementAt(touchedIndex)),
+                          ),
+                        ),
+                      ],
+                    ),
                   )
                 else
                   Column(
@@ -209,24 +211,54 @@ class _ExpenseChartState extends State<ExpenseChart> {
               spacing: 16,
               runSpacing: 12,
               alignment: WrapAlignment.center,
-              children: data.keys.map((category) => Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
+              children: data.entries.toList().asMap().entries.map((mapEntry) {
+                final index = mapEntry.key;
+                final entry = mapEntry.value;
+                final isSelected = index == touchedIndex;
+
+                return InkWell(
+                  onTap: () {
+                    setState(() {
+                      if (touchedIndex == index) {
+                        touchedIndex = -1;
+                      } else {
+                        touchedIndex = index;
+                      }
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: getColor(category),
-                      shape: BoxShape.circle,
+                      color: isSelected ? getColor(entry.key).withValues(alpha: 0.2) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: getColor(entry.key),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          entry.key,
+                          style: TextStyle(
+                            fontSize: 12, 
+                            color: isSelected ? Colors.white : Colors.white70,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    category,
-                    style: const TextStyle(fontSize: 12, color: Colors.white70),
-                  ),
-                ],
-              )).toList(),
+                );
+              }).toList(),
             ),
           ],
         ),
