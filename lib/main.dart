@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'services/auth_service.dart';
+import 'expense_tracker_screen.dart';
 
 Future<void> main() async {
   // 1. Ensures Flutter framework is completely ready before we start async operations
