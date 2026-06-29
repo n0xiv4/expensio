@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'models/expense.dart';
 import 'widgets/expense_chart.dart';
-import 'widgets/add_expense.dart';
+import 'package:expensio/widgets/add_expense.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -26,21 +26,18 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  void _openAddExpenseModal() {
-    showModalBottomSheet(
+  void _openAddExpenseModal() async {
+    final newExpense = await showModalBottomSheet<Expense>(
       context: context,
       isScrollControlled: true,
       builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-          ),
-          child: AddExpenseForm(
-            onAddExpense: _addNewExpense,
-          ),
-        );
+        return const AddExpenseForm();
       },
     );
+
+    if (newExpense != null) {
+      _addNewExpense(newExpense);
+    }
   }
 
   @override

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/expense.dart';
 
 class AddExpenseForm extends StatefulWidget {
@@ -25,10 +26,12 @@ class _AddExpenseFormState extends State<AddExpenseForm> {
 
   void _submit() {
     final title = _titleController.text.trim();
-    final amountText = _amountController.text.replaceFirst(',', '.'); // Handle comma as decimal
+    final amountText = _amountController.text.replaceFirst(',', '.');
     final amount = double.tryParse(amountText);
+    
+    final userId = Supabase.instance.client.auth.currentUser?.id;
 
-    if (title.isEmpty || amount == null || amount <= 0) {
+    if (title.isEmpty || amount == null || amount <= 0 || userId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a valid title and amount')),
       );
@@ -36,13 +39,13 @@ class _AddExpenseFormState extends State<AddExpenseForm> {
     }
 
     final newExpense = Expense(
+      userId: userId,
       title: title,
       amount: amount,
       category: _selectedCategory,
       date: _selectedDate,
     );
 
-    // Dismiss keyboard before popping to prevent UI lag during animation
     FocusScope.of(context).unfocus();
     Navigator.pop(context, newExpense);
   }
@@ -71,7 +74,6 @@ class _AddExpenseFormState extends State<AddExpenseForm> {
 
   @override
   Widget build(BuildContext context) {
-    // Add padding to avoid the keyboard covering the text fields
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Container(
