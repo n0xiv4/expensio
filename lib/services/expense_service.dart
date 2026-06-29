@@ -22,6 +22,12 @@ class ExpenseService {
     await _supabase.from('expenses').insert(expense.toMap());
   }
 
+  // Update an existing expense
+  Future<void> updateExpense(Expense expense) async {
+    if (expense.id == null) return;
+    await _supabase.from('expenses').update(expense.toMap()).eq('id', expense.id!);
+  }
+
   // Delete an expense
   Future<void> deleteExpense(String id) async {
     await _supabase.from('expenses').delete().eq('id', id);

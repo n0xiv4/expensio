@@ -5,6 +5,8 @@ import 'package:expensio/widgets/add_expense.dart';
 import 'package:expensio/widgets/expense_chart.dart';
 import 'package:expensio/models/expense.dart';
 import 'package:expensio/services/expense_service.dart';
+import 'package:expensio/models/category.dart' as model;
+import 'package:expensio/services/category_service.dart';
 
 class ExpenseTrackerScreen extends StatefulWidget {
   const ExpenseTrackerScreen({super.key});
@@ -15,63 +17,83 @@ class ExpenseTrackerScreen extends StatefulWidget {
 
 class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
   final _expenseService = ExpenseService();
+  final _categoryService = CategoryService();
   final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
+  
   List<Expense> _expenses = [];
-  StreamSubscription? _subscription;
+  List<model.Category> _customCategories = [];
+  StreamSubscription? _expenseSub;
+  StreamSubscription? _categorySub;
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _initStream();
+    _initStreams();
   }
 
-  void _initStream() {
-    _subscription = _expenseService.getExpensesStream().listen((data) {
+  void _initStreams() {
+    _expenseSub = _expenseService.getExpensesStream().listen((data) {
       if (mounted) {
-        if (_isLoading) {
-          setState(() {
-            _expenses = data;
-            _isLoading = false;
-          });
-        } else {
-          setState(() {
-            _expenses = data;
-          });
-        }
+        setState(() {
+          _expenses = data;
+          _isLoading = false;
+        });
+      }
+    });
+
+    _categorySub = _categoryService.getCategoriesStream().listen((data) {
+      if (mounted) {
+        setState(() {
+          _customCategories = data;
+        });
       }
     });
   }
 
   @override
   void dispose() {
-    _subscription?.cancel();
+    _expenseSub?.cancel();
+    _categorySub?.cancel();
     super.dispose();
   }
 
-  void _openAddExpense() async {
-    final newExpense = await showModalBottomSheet<Expense>(
+  void _openAddExpense({Expense? expense}) async {
+    final result = await showModalBottomSheet<Expense>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const AddExpenseForm(),
+      builder: (_) => AddExpenseForm(initialExpense: expense),
     );
 
-    if (newExpense != null) {
-      setState(() {
-        _expenses.insert(0, newExpense);
-        _listKey.currentState?.insertItem(0);
-      });
-
-      try {
-        await _expenseService.addExpense(newExpense);
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save: $e'), backgroundColor: Colors.redAccent),
-        );
+    if (result != null) {
+      if (expense == null) {
+        // Add new
+        setState(() {
+          _expenses.insert(0, result);
+          _listKey.currentState?.insertItem(0);
+        });
+        try {
+          await _expenseService.addExpense(result);
+        } catch (e) {
+          _showError('Failed to save: $e');
+        }
+      } else {
+        // Update existing
+        try {
+          await _expenseService.updateExpense(result);
+        } catch (e) {
+          _showError('Failed to update: $e');
+        }
       }
     }
+  }
+
+  void _showError(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: Colors.redAccent),
+    );
   }
 
   void _confirmDelete(Expense expense, int index) async {
@@ -120,6 +142,7 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           child: InkWell(
+            onTap: isRemoving ? null : () => _openAddExpense(expense: exp),
             onLongPress: isRemoving ? null : () => _confirmDelete(exp, index),
             borderRadius: BorderRadius.circular(16),
             child: Container(
@@ -127,14 +150,14 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
               decoration: BoxDecoration(
                 color: const Color(0xFF1E293B),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withOpacity(0.05)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
               ),
               child: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: _getCategoryColor(exp.category).withOpacity(0.1),
+                      color: _getCategoryColor(exp.category).withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
@@ -177,22 +200,36 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
     );
   }
 
-  IconData _getCategoryIcon(String category) {
-    switch (category) {
+  IconData _getCategoryIcon(String categoryName) {
+    // Check default icons
+    switch (categoryName) {
       case 'Food': return Icons.restaurant;
       case 'Transport': return Icons.directions_car;
       case 'Shopping': return Icons.shopping_bag;
       case 'Bills': return Icons.receipt;
-      default: return Icons.more_horiz;
+      case 'Health': return Icons.medical_services;
+      case 'Entertainment': return Icons.movie;
+      case 'Education': return Icons.book;
+    }
+    
+    // Check custom icons
+    try {
+      final custom = _customCategories.firstWhere((c) => c.name == categoryName);
+      return custom.icon;
+    } catch (_) {
+      return Icons.more_horiz;
     }
   }
 
-  Color _getCategoryColor(String category) {
-    switch (category) {
+  Color _getCategoryColor(String categoryName) {
+    switch (categoryName) {
       case 'Food': return const Color(0xFFF59E0B);
       case 'Transport': return const Color(0xFF3B82F6);
       case 'Shopping': return const Color(0xFF8B5CF6);
       case 'Bills': return const Color(0xFFEF4444);
+      case 'Health': return const Color(0xFF10B981);
+      case 'Entertainment': return const Color(0xFFF472B6);
+      case 'Education': return const Color(0xFF60A5FA);
       default: return const Color(0xFF64748B);
     }
   }
@@ -218,7 +255,7 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      theme.colorScheme.primary.withOpacity(0.2),
+                      theme.colorScheme.primary.withValues(alpha: 0.2),
                       Colors.transparent,
                     ],
                   ),
@@ -280,7 +317,7 @@ class _ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.large(
-        onPressed: _openAddExpense,
+        onPressed: () => _openAddExpense(),
         child: const Icon(Icons.add_rounded, size: 32),
       ),
     );
